@@ -1,0 +1,71 @@
+version: "3"
+services:
+  db:
+    image: postgres:13
+    restart: always # Docker debe reiniciar automáticamente el contenedor cuando se detiene inesperadamente
+    environment:
+      POSTGRES_DB: "store"
+      POSTGRES_USER: "valentin"
+      POSTGRES_PASSWORD: "valentin"
+      POSTGRES_INITDB_ARGS: "--auth-host=md5 --auth-local=md5"
+    ports:
+      - "5432:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: "rabbitmq"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: "rabbit"
+      RABBITMQ_DEFAULT_PASS: "rabbit"
+    networks:
+      - app_network
+
+  loadBalancer:
+    image: haproxy
+    ports:
+      - "80:80" # Mapear el puerto del contenedor al puerto del host
+    volumes:
+      - ./haproxy:/usr/local/etc/haproxy # Mapear el archivo de configuración del contenedor al archivo de configuración del host=
+    depends_on:
+      - app_users
+      - app_posts
+    networks:
+      - app_network
+
+  app_users:
+    image: app_users
+    environment:
+      PORT: 3000 # Puedes cambiar el puerto según las necesidades de tu aplicación 1
+      DATABASE_URL: "postgresql://valentin:valentin@:5432/store?schema=sample"
+      RABBITMQ_URL: "amqp://rabbit:rabbit@rabbitmq:5672"
+    depends_on:
+      - rabbitmq
+      - db
+    networks:
+      - app_network
+
+  app_posts:
+    image: app_posts
+    environment:
+      PORT: 3001 # Puedes cambiar el puerto según las necesidades de tu aplicación 2
+      DATABASE_URL: "postgresql://valentin:valentin@db:5432/store?schema=sample"
+      RABBITMQ_URL: "amqp://rabbit:rabbit@rabbitmq:5672"
+    depends_on:
+      - rabbitmq
+      - db
+    networks:
+      - app_network
+
+volumes:
+  db:
+
+networks:
+  app_network:
